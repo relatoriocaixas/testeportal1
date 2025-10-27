@@ -1,29 +1,10 @@
-// Importa Firebase do portal
 import {
-  auth,
-  db,
-  storage,
-  onAuthStateChanged,
-  signOut,
-  updatePassword,
-  getDocs,
-  doc,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  Timestamp
-} from "./firebaseConfig.js";
+  auth, db, onAuthStateChanged, signOut,
+  getDocs, addDoc, updateDoc, deleteDoc, getDoc,
+  collection, query, where, orderBy, limit, Timestamp
+} from "../firebaseConfig.js";
 
-import { ref, uploadBytes, getDownloadURL, deleteObject } 
-  from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
-
-const ADMIN_MATS = ["6266", "4144", "70029"];
+const ADMIN_MATS = ["6266", "6414", "70029", "4144"];
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const el = (id) => document.getElementById(id);
@@ -33,212 +14,106 @@ let CURRENT_USER = null;
 let CURRENT_USER_DATA = null;
 let IS_ADMIN = false;
 
+// ===== Receber dados do portal via postMessage =====
+window.addEventListener("message", (event) => {
+  if(event.data?.type === "syncAuth"){
+    const usuario = event.data.usuario;
+    CURRENT_USER_DATA = { matricula: usuario.matricula, nome: usuario.nome };
+    IS_ADMIN = ADMIN_MATS.includes(usuario.matricula);
+
+    // Atualiza visibilidade
+    qsel(".admin-only").forEach(e => e.hidden = !IS_ADMIN);
+    qsel(".user-only").forEach(e => e.hidden = IS_ADMIN);
+
+    carregarListaPadrao();
+    popularMatriculasSelects();
+  }
+});
+
+// ===== Botoes logout e alterar senha =====
+el("btnLogout")?.addEventListener("click", async () => {
+  await signOut(auth);
+  window.parent.location.href = '../login.html';
+});
+
+el("btnAlterarSenha")?.addEventListener("click", async () => {
+  const nova = prompt("Nova senha:");
+  if(!nova) return;
+  try { await auth.currentUser.updatePassword(nova); alert("Senha alterada."); }
+  catch(e){ alert("Erro: " + e.message); }
+});
+
 // ===== Helpers =====
-function formatDateBR(ts) {
+function formatDateBR(ts){
   const d = ts instanceof Date ? ts : ts?.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleDateString('pt-BR');
 }
-function parseDateInput(value) {
-  const [y, m, d] = value.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
-}
-function getMonthRange(year, monthIdx) {
-  const start = new Date(year, monthIdx, 1, 0, 0, 0, 0);
-  const end = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
-  return { start, end };
-}
-function getCurrentMonthValue() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+function parseDateInput(val){
+  if(!val) return null;
+  const [y,m,d] = val.split('-').map(Number);
+  return new Date(y,m-1,d);
 }
 
-// ===== DASHBOARD (protegido) =====
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    // Redireciona para o portal principal
-    location.href = "../../../index.html";
-    return;
-  }
-
-  CURRENT_USER = user;
-  const us = await getDoc(doc(db, "usuarios", user.uid));
-  CURRENT_USER_DATA = us.exists() ? us.data() : { matricula: (user.email || "").split("@")[0], nome: "" };
-  IS_ADMIN = ADMIN_MATS.includes(CURRENT_USER_DATA.matricula);
-
-  // UI roles
-  qsel(".admin-only").forEach((b) => (b.hidden = !IS_ADMIN));
-  qsel(".user-only").forEach((b) => (b.hidden = IS_ADMIN));
-
-  // binds
-  el("btnLogout")?.addEventListener("click", async () => {
-    await signOut(auth);
-    location.href = "../../../index.html";
-  });
-
-  el("btnAlterarSenha")?.addEventListener("click", async () => {
-    const nova = prompt("Nova senha:");
-    if (!nova) return;
-    try {
-      await updatePassword(auth.currentUser, nova);
-      alert("Senha alterada.");
-    } catch (e) { alert("Erro: " + e.message); }
-  });
-
-  el("btnResumoRecebedor")?.addEventListener("click", () => el("resumoWrap").classList.toggle("collapsed"));
-  el("btnToggleResumo")?.addEventListener("click", () => el("resumoWrap").classList.toggle("collapsed"));
-  el("mesResumo").value = getCurrentMonthValue();
-  el("btnCarregarResumo")?.addEventListener("click", carregarResumoAdmin);
-
-  ["valorFolha", "valorDinheiro"].forEach((id) => {
-    const i = el(id);
-    i && i.addEventListener("input", () => {
-      const vf = parseFloat(el("valorFolha").value || 0);
-      const vd = parseFloat(el("valorDinheiro").value || 0);
-      el("sobraFalta").value = BRL.format(vd - vf);
-    });
-  });
-
-  el("btnSalvarRelatorio")?.addEventListener("click", salvarRelatorioAdmin);
-  el("btnAplicarFiltroMatricula")?.addEventListener("click", filtrarPorMatricula);
-  el("btnFiltrarPorData")?.addEventListener("click", filtrarPorData);
-
-  await popularMatriculasSelects();
-  await carregarListaPadrao();
-});
-
-// ===== Selects =====
-async function popularMatriculasSelects() {
-  const snap = await getDocs(collection(db, "usuarios"));
-  const users = snap.docs.map(d => d.data()).sort((a,b) => (a.matricula||"").localeCompare(b.matricula||""));
+// ===== Carregar selects de matrícula =====
+async function popularMatriculasSelects(){
+  const snap = await getDocs(collection(db,"usuarios"));
+  const users = snap.docs.map(d => d.data()).sort((a,b)=> (a.matricula||"").localeCompare(b.matricula||""));
   const options = users.map(u => `<option value="${u.matricula}">${u.matricula} — ${u.nome||""}</option>`).join("");
-  el("matriculaForm") && (el("matriculaForm").innerHTML = options);
-  el("filtroMatricula") && (el("filtroMatricula").innerHTML = '<option value="">Selecione...</option>' + options);
-  el("selectMatriculas") && (el("selectMatriculas").innerHTML = options);
+  if(el("matriculaForm")) el("matriculaForm").innerHTML = options;
+  if(el("filtroMatricula")) el("filtroMatricula").innerHTML = '<option value="">Selecione...</option>' + options;
+  if(el("selectMatriculas")) el("selectMatriculas").innerHTML = options;
 }
 
-// ===== Salvar Relatório =====
-async function salvarRelatorioAdmin() {
-  if (!IS_ADMIN) { alert("Apenas administradores podem criar relatórios."); return; }
+// ===== Salvar relatório (apenas admin) =====
+el("btnSalvarRelatorio")?.addEventListener("click", async ()=>{
+  if(!IS_ADMIN){ alert("Apenas admins podem criar."); return; }
+
   const matricula = el("matriculaForm").value;
   const data = parseDateInput(el("dataCaixa").value);
-  const vf = parseFloat(el("valorFolha").value || 0);
-  const vd = parseFloat(el("valorDinheiro").value || 0);
-  const obs = el("observacao").value || "";
-  if (!matricula || !data) { alert("Preencha matrícula e data."); return; }
-  try {
-    const sobra = vd - vf;
-    await addDoc(collection(db, "relatorios"), {
-      matricula,
-      dataCaixa: Timestamp.fromDate(data),
-      valorFolha: vf,
-      valorDinheiro: vd,
-      sobraFalta: sobra,
-      observacao: obs,
-      posTexto: "",
-      posEditado: false,
-      imagemPath: "",
-      criadoEm: Timestamp.now(),
-      createdBy: CURRENT_USER.uid
-    });
-    alert("Relatório salvo.");
-    ["dataCaixa","valorFolha","valorDinheiro","observacao","sobraFalta"].forEach(id => el(id).value = "");
-    await carregarListaPadrao();
-  } catch (e) { alert("Erro ao salvar: " + e.message); }
-}
+  const vf = parseFloat(el("valorFolha").value||0);
+  const vd = parseFloat(el("valorDinheiro").value||0);
+  const obs = el("observacao").value||"";
 
-// ===== Carregar Lista =====
-async function carregarListaPadrao() {
+  if(!matricula||!data){ alert("Preencha matrícula e data"); return; }
+
+  try{
+    const sobra = vd-vf;
+    await addDoc(collection(db,"relatorios"),{
+      matricula, dataCaixa: Timestamp.fromDate(data),
+      valorFolha: vf, valorDinheiro: vd, sobraFalta: sobra,
+      observacao: obs, posTexto:"", posEditado:false,
+      imagemPath:"", criadoEm: Timestamp.now(),
+      createdBy: CURRENT_USER_DATA.matricula
+    });
+    alert("Relatório salvo");
+    ["dataCaixa","valorFolha","valorDinheiro","observacao","sobraFalta"].forEach(id=>el(id).value="");
+    carregarListaPadrao();
+  }catch(e){ alert("Erro ao salvar: "+e.message); }
+});
+
+// ===== Carregar lista =====
+async function carregarListaPadrao(){
   let qy;
-  if (IS_ADMIN) {
-    qy = query(collection(db, "relatorios"), orderBy("dataCaixa", "desc"));
+  if(IS_ADMIN){
+    qy = query(collection(db,"relatorios"), orderBy("dataCaixa","desc"));
   } else {
-    qy = query(collection(db, "relatorios"),
+    qy = query(collection(db,"relatorios"),
       where("matricula","==",CURRENT_USER_DATA.matricula),
-      orderBy("dataCaixa","desc"),
-      limit(31)
-    );
+      orderBy("dataCaixa","desc"), limit(31));
   }
   const snap = await getDocs(qy);
-  renderLista(snap.docs.map(d => ({id:d.id,...d.data()})));
+  renderLista(snap.docs.map(d=>({id:d.id,...d.data()})));
 }
 
-// ===== Filtros =====
-async function filtrarPorMatricula() {
-  if (!IS_ADMIN) return;
-  const mat = el("filtroMatricula").value;
-  if (!mat) { alert("Selecione uma matrícula."); return; }
-  const snap = await getDocs(query(collection(db,"relatorios"),
-    where("matricula","==",mat),
-    orderBy("dataCaixa","desc"),
-    limit(31)
-  ));
-  renderLista(snap.docs.map(d => ({id:d.id,...d.data()})));
-  el("selectMatriculas").value = mat;
-}
-
-async function filtrarPorData() {
-  const val = el("filtroDataGlobal").value;
-  if (!val) { alert("Escolha uma data."); return; }
-  const d = parseDateInput(val);
-  const start = new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0,0);
-  const end = new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59,999);
-  let snap = await getDocs(query(collection(db,"relatorios"),
-    where("dataCaixa",">=",Timestamp.fromDate(start)),
-    where("dataCaixa","<=",Timestamp.fromDate(end)),
-    orderBy("dataCaixa","desc")
-  ));
-  let docs = snap.docs.map(d => ({id:d.id,...d.data()}));
-  if (!IS_ADMIN) docs = docs.filter(r => r.matricula === CURRENT_USER_DATA.matricula);
-  renderLista(docs);
-}
-
-// ===== Resumo =====
-async function carregarResumoAdmin() {
-  if (!IS_ADMIN) return;
-  const mat = el("selectMatriculas").value;
-  const [y,m] = (el("mesResumo").value || getCurrentMonthValue()).split("-").map(Number);
-  const {start,end} = getMonthRange(y,m-1);
-  const snap = await getDocs(query(collection(db,"relatorios"),
-    where("matricula","==",mat),
-    where("dataCaixa",">=",Timestamp.fromDate(start)),
-    where("dataCaixa","<=",Timestamp.fromDate(end)),
-    orderBy("dataCaixa","desc")
-  ));
-  const rows = snap.docs.map(d => ({id:d.id,...d.data()}));
-  el("resumoTotalFolha").textContent = BRL.format(rows.reduce((a,r)=>a+(r.valorFolha||0),0));
-  const saldo = rows.reduce((a,r)=>a+((r.valorDinheiro||0)-(r.valorFolha||0)),0);
-  el("resumoSaldo").textContent = BRL.format(saldo);
-  el("resumoSituacao").textContent = saldo>=0?"POSITIVO":"NEGATIVO";
-
-  const tipo = el("filtroPositivosNegativos").value;
-  const filtrados = rows.filter(r=>{
-    const sf=(r.valorDinheiro||0)-(r.valorFolha||0);
-    if(tipo==="positivos") return sf>0;
-    if(tipo==="negativos") return sf<0;
-    return true;
-  });
-
-  const cont = el("resumoLista");
-  cont.innerHTML = "";
-  filtrados.forEach(r=>{
-    const sf=(r.valorDinheiro||0)-(r.valorFolha||0);
-    const div=document.createElement("div");
-    div.className="item";
-    div.innerHTML=`<div class="item-header"><div class="item-title">${formatDateBR(r.dataCaixa)} — Matrícula ${r.matricula}</div><span class="badge">${BRL.format(r.valorFolha||0)} | ${BRL.format(r.valorDinheiro||0)} | <strong>${BRL.format(sf)}</strong></span></div>`;
-    cont.appendChild(div);
-  });
-}
-
-// ===== Render Lista =====
-function renderLista(rows) {
+// ===== Renderização =====
+function renderLista(rows){
   const lista = el("listaRelatorios");
   lista.innerHTML="";
   rows.forEach(r=>{
-    const wrap=document.createElement("div");
+    const wrap = document.createElement("div");
     wrap.className="item";
     const hasPos = r.posTexto && r.posTexto.trim().length>0;
-    const warn = hasPos ? '<span class="badge warn">⚠️ verificar pós conferência</span>':"";
+    const warn = hasPos ? '<span class="badge warn">⚠️ pós conferência</span>' : "";
     wrap.innerHTML=`
       <div class="item-header">
         <div class="item-title">${formatDateBR(r.dataCaixa)} — Matrícula ${r.matricula} ${warn}</div>
@@ -251,29 +126,102 @@ function renderLista(rows) {
       </div>
       <div class="item-body collapsed">
         <div class="field"><div>Data do Caixa</div><div>${formatDateBR(r.dataCaixa)}</div></div>
-        <div class="field"><div>Valor Folha</div><div class="money">${BRL.format(r.valorFolha||0)}</div></div>
-        <div class="field"><div>Valor Dinheiro</div><div class="money">${BRL.format(r.valorDinheiro||0)}</div></div>
-        <div class="field"><div>Sobra/Falta</div><div class="money">${BRL.format((r.valorDinheiro||0)-(r.valorFolha||0))}</div></div>
+        <div class="field"><div>Valor Folha</div><div>${BRL.format(r.valorFolha||0)}</div></div>
+        <div class="field"><div>Valor Dinheiro</div><div>${BRL.format(r.valorDinheiro||0)}</div></div>
+        <div class="field"><div>Sobra/Falta</div><div>${BRL.format((r.valorDinheiro||0)-(r.valorFolha||0))}</div></div>
         <div class="field"><div>Observação</div><div>${(r.observacao||"").replace(/[<>&]/g,"")}</div></div>
       </div>
     `;
-    const body=wrap.querySelector(".item-body");
-    wrap.querySelector(".btnToggle").addEventListener("click",()=>body.classList.toggle("collapsed"));
-    wrap.querySelector(".btnPos")?.addEventListener("click",()=>openPosModal(r));
+    wrap.querySelector(".btnToggle").addEventListener("click",()=>wrap.querySelector(".item-body").classList.toggle("collapsed"));
     if(IS_ADMIN){
-      wrap.querySelector(".btnEdit")?.addEventListener("click",()=>editRelatorio(r));
-      wrap.querySelector(".btnDelete")?.addEventListener("click",()=>deleteRelatorio(r));
+      wrap.querySelector(".btnEdit").addEventListener("click",()=>editRelatorio(r));
+      wrap.querySelector(".btnDelete").addEventListener("click",()=>deleteRelatorio(r));
     }
     lista.appendChild(wrap);
   });
 }
 
-// ===== Modal Pós Conferência =====
-function openPosModal(r) {
-  const modal = el("posModal");
-  el("posTexto").value = r.posTexto || "";
-  modal.showModal();
+// ===== Editar / Excluir =====
+async function editRelatorio(r){
+  el("matriculaForm").value=r.matricula;
+  el("dataCaixa").value=r.dataCaixa.toDate ? r.dataCaixa.toDate().toISOString().split('T')[0] : r.dataCaixa;
+  el("valorFolha").value=r.valorFolha||0;
+  el("valorDinheiro").value=r.valorDinheiro||0;
+  el("observacao").value=r.observacao||"";
 }
 
-function editRelatorio(r){ /* função existente */ }
-function deleteRelatorio(r){ /* função existente */ }
+async function deleteRelatorio(r){
+  if(confirm("Deseja realmente excluir este relatório?")){
+    await deleteDoc(doc(db,"relatorios",r.id));
+    carregarListaPadrao();
+  }
+}
+
+// ===== Sobra/Falta automático =====
+["valorFolha","valorDinheiro"].forEach(id=>{
+  const i = el(id);
+  i && i.addEventListener("input", ()=>{
+    const vf = parseFloat(el("valorFolha").value||0);
+    const vd = parseFloat(el("valorDinheiro").value||0);
+    el("sobraFalta").value=BRL.format(vd-vf);
+  });
+});
+
+// ===== Filtros =====
+el("btnAplicarFiltroMatricula")?.addEventListener("click", async ()=>{
+  if(!IS_ADMIN) return;
+  const mat = el("filtroMatricula").value;
+  if(!mat){ alert("Selecione uma matrícula"); return; }
+  const snap = await getDocs(query(collection(db,"relatorios"), where("matricula","==",mat), orderBy("dataCaixa","desc"), limit(31)));
+  renderLista(snap.docs.map(d=>({id:d.id,...d.data()})));
+  el("selectMatriculas").value=mat;
+});
+
+el("btnFiltrarPorData")?.addEventListener("click", async ()=>{
+  const val = el("filtroDataGlobal").value;
+  if(!val){ alert("Escolha uma data"); return; }
+  const d = parseDateInput(val);
+  const start = new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0,0);
+  const end = new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59,999);
+  let qy = query(collection(db,"relatorios"), where("dataCaixa",">=",Timestamp.fromDate(start)), where("dataCaixa","<=",Timestamp.fromDate(end)), orderBy("dataCaixa","desc"));
+  const snap = await getDocs(qy);
+  let docs = snap.docs.map(d=>({id:d.id,...d.data()}));
+  if(!IS_ADMIN) docs = docs.filter(r=>r.matricula===CURRENT_USER_DATA.matricula);
+  renderLista(docs);
+});
+
+// ===== Resumo =====
+el("btnCarregarResumo")?.addEventListener("click", async ()=>{
+  if(!IS_ADMIN) return;
+  const mat = el("selectMatriculas").value;
+  const [y,m] = (el("mesResumo").value||new Date().toISOString().slice(0,7)).split("-").map(Number);
+  const start = new Date(y,m-1,1,0,0,0,0);
+  const end = new Date(y,m,0,23,59,59,999);
+  const snap = await getDocs(query(collection(db,"relatorios"), where("matricula","==",mat), where("dataCaixa",">=",Timestamp.fromDate(start)), where("dataCaixa","<=",Timestamp.fromDate(end)), orderBy("dataCaixa","desc")));
+  const rows = snap.docs.map(d=>({id:d.id,...d.data()}));
+  const totalFolha = rows.reduce((acc,r)=>acc+(r.valorFolha||0),0);
+  const saldo = rows.reduce((acc,r)=>acc+((r.valorDinheiro||0)-(r.valorFolha||0)),0);
+  el("resumoTotalFolha").textContent=BRL.format(totalFolha);
+  el("resumoSaldo").textContent=BRL.format(saldo);
+  el("resumoSituacao").textContent=saldo>=0?"POSITIVO":"NEGATIVO";
+
+  const tipo = el("filtroPositivosNegativos").value;
+  const filtrados = rows.filter(r=>{
+    const sf = (r.valorDinheiro||0)-(r.valorFolha||0);
+    if(tipo==="positivos") return sf>0;
+    if(tipo==="negativos") return sf<0;
+    return true;
+  });
+  const cont = el("resumoLista");
+  cont.innerHTML="";
+  filtrados.forEach(r=>{
+    const sf = (r.valorDinheiro||0)-(r.valorFolha||0);
+    const div = document.createElement("div");
+    div.className="item";
+    div.innerHTML=`<div class="item-header">
+      <div class="item-title">${formatDateBR(r.dataCaixa)} — Matrícula ${r.matricula}</div>
+      <span class="badge">${BRL.format(r.valorFolha||0)} | ${BRL.format(r.valorDinheiro||0)} | <strong>${BRL.format(sf)}</strong></span>
+    </div>`;
+    cont.appendChild(div);
+  });
+});
