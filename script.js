@@ -15,7 +15,7 @@ const ROUTES = {
   abastecimento: "sistemas/abastecimento/index.html",
   emprestimo: "sistemas/emprestimo/index.html",
   relatorios: "sistemas/emprestimo/emprestimocartao-main/relatorio.html",
-  diferencas: "sistemas/diferencas/index.html"
+  diferencas: "sistemas/diferencas/relatoriodiferencas-main/dashboard.html"
 };
 
 function goHome(){
