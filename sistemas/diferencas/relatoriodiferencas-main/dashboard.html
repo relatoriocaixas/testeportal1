@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Relatório de Diferenças</title>
-  <link rel="stylesheet" href="styles.css"/>
-  <script type="module" src="app.js" defer></script>
+  <link rel="stylesheet" href="./styles.css"/>
+  <script type="module" src="./app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <img src="assets/logo.png" alt="Logo" class="logo"/>
+      <img src="./assets/logo.png" alt="Logo" class="logo"/>
       <h1>Relatório de Diferenças</h1>
     </div>
     <div class="actions">
@@ -24,10 +24,10 @@
     <section id="appSection">
       <div class="grid">
         <!-- ESQUERDA: RESUMO (ADMIN) -->
-        <aside class="card admin-only">
+        <aside class="card">
           <div class="flex-between">
             <h3>Resumo do Recebedor</h3>
-            <button id="btnToggleResumo" class="btn outline">Esconder/Exibir</button>
+            <button id="btnToggleResumo" class="btn outline admin-only" hidden>Esconder/Exibir</button>
           </div>
           <div id="resumoWrap" class="collapsed">
             <div class="row">
@@ -37,7 +37,7 @@
             <div class="row">
               <label>Mês</label>
               <input id="mesResumo" type="month" />
-              <button id="btnCarregarResumo" class="btn">Carregar</button>
+              <button id="btnCarregarResumo" class="btn admin-only" hidden>Carregar</button>
             </div>
             <div id="resumoDados" class="stats">
               <div><span>Total Folha (mês)</span><strong id="resumoTotalFolha">R$ 0,00</strong></div>
