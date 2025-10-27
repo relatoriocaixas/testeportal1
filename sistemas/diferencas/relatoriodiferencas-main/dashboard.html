@@ -1,73 +1,65 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Relatório de Diferenças</title>
-<link rel="stylesheet" href="style.css">
-<script type="module" src="app.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatórios de Diferenças</title>
+  <link rel="stylesheet" href="./relatoriodiferencas-main/style.css">
 </head>
 <body>
-<div class="dashboard">
+  <div class="dashboard">
+    <header>
+      <h1>Relatórios de Diferenças</h1>
+      <button id="btnLogout">Sair</button>
+      <button id="btnAlterarSenha">Alterar Senha</button>
+    </header>
 
-  <div class="topbar">
-    <h2>Relatórios de Diferenças</h2>
-    <button id="btnLogout">Sair</button>
-    <button id="btnAlterarSenha">Alterar Senha</button>
-  </div>
-
-  <div id="resumoWrap" class="collapsed">
-    <h3>Resumo Recebedor</h3>
-    <div>
-      <label>Mês:</label>
-      <input type="month" id="mesResumo">
-      <label>Matrícula:</label>
+    <section id="resumoWrap" class="collapsed">
+      <h2>Resumo Recebedor</h2>
+      <label>Mês: <input type="month" id="mesResumo"></label>
       <select id="selectMatriculas"></select>
       <button id="btnCarregarResumo">Carregar</button>
-      <label>Filtrar:</label>
-      <select id="filtroPositivosNegativos">
-        <option value="">Todos</option>
-        <option value="positivos">Positivos</option>
-        <option value="negativos">Negativos</option>
-      </select>
-      <button id="btnToggleResumo">Mostrar/Ocultar</button>
-    </div>
-    <div>
-      Total Folha: <span id="resumoTotalFolha">R$0,00</span> | Saldo: <span id="resumoSaldo">R$0,00</span> | Situação: <span id="resumoSituacao">-</span>
-    </div>
-    <div id="resumoLista"></div>
-  </div>
+      <div>
+        Total Folha: <span id="resumoTotalFolha">R$0,00</span> |
+        Saldo: <span id="resumoSaldo">R$0,00</span> |
+        Situação: <span id="resumoSituacao">POSITIVO</span>
+      </div>
+      <div>
+        Tipo de filtro:
+        <select id="filtroPositivosNegativos">
+          <option value="todos">Todos</option>
+          <option value="positivos">Positivos</option>
+          <option value="negativos">Negativos</option>
+        </select>
+      </div>
+      <div id="resumoLista"></div>
+      <button id="btnToggleResumo">Mostrar/Ocultar Resumo</button>
+    </section>
 
-  <div class="form-relatorio">
-    <h3>Adicionar/Editar Relatório</h3>
-    <div>
-      <label>Matrícula:</label>
-      <select id="matriculaForm"></select>
-      <label>Data do Caixa:</label>
-      <input type="date" id="dataCaixa">
-      <label>Valor Folha:</label>
-      <input type="number" id="valorFolha">
-      <label>Valor Dinheiro:</label>
-      <input type="number" id="valorDinheiro">
-      <label>Sobra/Falta:</label>
-      <input type="text" id="sobraFalta" readonly>
-      <label>Observação:</label>
-      <input type="text" id="observacao">
+    <section id="formRelatorio">
+      <label>Matrícula: <select id="matriculaForm"></select></label>
+      <label>Data Caixa: <input type="date" id="dataCaixa"></label>
+      <label>Valor Folha: <input type="number" id="valorFolha" step="0.01"></label>
+      <label>Valor Dinheiro: <input type="number" id="valorDinheiro" step="0.01"></label>
+      <label>Sobra/Falta: <input type="text" id="sobraFalta" readonly></label>
+      <label>Observação: <input type="text" id="observacao"></label>
       <button id="btnSalvarRelatorio">Salvar Relatório</button>
-    </div>
+    </section>
+
+    <section id="filtros">
+      <label>Filtrar por matrícula:
+        <select id="filtroMatricula"></select>
+        <button id="btnAplicarFiltroMatricula">Aplicar</button>
+      </label>
+      <label>Filtrar por data:
+        <input type="date" id="filtroDataGlobal">
+        <button id="btnFiltrarPorData">Filtrar</button>
+      </label>
+    </section>
+
+    <section id="listaRelatorios"></section>
   </div>
 
-  <div class="filtros">
-    <label>Filtrar Matrícula:</label>
-    <select id="filtroMatricula"></select>
-    <button id="btnAplicarFiltroMatricula">Filtrar</button>
-    <label>Filtrar Data:</label>
-    <input type="date" id="filtroDataGlobal">
-    <button id="btnFiltrarPorData">Filtrar</button>
-  </div>
-
-  <div id="listaRelatorios"></div>
-
-</div>
+  <script type="module" src="./relatoriodiferencas-main/app.js"></script>
 </body>
 </html>
